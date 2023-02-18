@@ -1,17 +1,25 @@
 import { useState } from 'react';
 import './App.css';
 
-
-function Square({value, onSquareClick }) {
-  if ( value ) {
+/**
+ * Square component.
+ *
+ * @param {*} param0 
+ * @returns 
+ */
+function Square({value, onSquareClick, isWinner, atEnd, index }) {
+  let css = "square";
+  css += isWinner ? " winner" : "";
+  css += atEnd ? " game-over" : "";
+  if ( value || atEnd ) {
     return (
-      <span className="square">
+      <span className={css}>
         {value}
       </span>
     );
   } else {
     return (
-      <button className="square" onClick={onSquareClick}>
+      <button id={ "button-" + index } className={css} onClick={onSquareClick}>
         {value}
       </button>
     );
@@ -23,9 +31,11 @@ function Square({value, onSquareClick }) {
  * @param {{xIsNext: boolean, squares: Array, onPlay: method}} Is X next?
  * @returns 
  */
-function Board({ xIsNext, squares, onPlay }) {
-  const player1 = 'B';
-  const player2 = 'A';
+function Board({ xIsNext, squares, onPlay, count }) {
+  const player1 = '⚪';
+  const player2 = '⚫';
+  let gameOver = false;
+  // let betweenGames = false; // We'll come back to this...
 
   /**
    * `onSquareClick` : What should happen when you click a square.
@@ -42,26 +52,36 @@ function Board({ xIsNext, squares, onPlay }) {
     } else {
       nextSquares[i] = player2;
     }
-    onPlay( nextSquares );
+    onPlay( nextSquares, i );
   }
 
   const winner = calculateWinner(squares);
   let winningRow;
   let status;
   if (winner !== null ) {
+    gameOver = true;
     status = 'Winner: ' + winner;
     winningRow = calculateWinner( squares, 'row' );
-    console.log( winningRow );
   } else {
     status = 'Current player: ' + (xIsNext ? player1 : player2);
   }
   // Output all the square at once. There are nine total.
-  let renderedSquares = squares.map( (square, n) =>  <Square key={'square-' + n} index={n} value={squares[n]} onSquareClick={() => handleClick(n)} /> );
+  let renderedSquares = squares.map(
+    (square, n) =>  
+      <Square 
+        key={'square-' + n} 
+        index={n} 
+        value={squares[n]} 
+        onSquareClick={() => handleClick(n)}
+        isWinner={ ( winningRow && winningRow.includes(n))}
+        atEnd={ gameOver }
+      />
+  );
 
   return (
     <>
       <div className="status">{status}</div>
-      <div className='play-area'>
+      <div className='board'>
           {renderedSquares}
       </div>
     </>
@@ -69,14 +89,44 @@ function Board({ xIsNext, squares, onPlay }) {
 }
 
 export default function Game() {
-  const [history, setHistory] = useState([Array(9).fill(null)]);
+  const btnCount = 9;
+  const [history, setHistory] = useState([Array(btnCount).fill(null)]);
+  // Like history, but better
+  const [timeline, setTimeline] = useState(
+    [
+      {
+        'board' : Array(btnCount).fill(null),
+        'position' : null
+      }
+    ]);
+  const [positions, setPositions] = useState([]);
   const [currentMove, setCurrentMove] = useState(0);
+  const [sortOrder, setSortOrder] = useState( 'desc' );
   const xIsNext = currentMove % 2 === 0;
   const currentSquares = history[currentMove];
 
-  function handlePlay(nextSquares) {
+  
+
+  function handlePlay(nextSquares, buttonPosition ) {
+    const roundState = {
+      board : nextSquares,
+      position : buttonPosition
+    };
     const nextHistory = [...history.slice(0, currentMove + 1), nextSquares];
     setHistory(nextHistory);
+
+    const nextTimeline = [...timeline.slice(0, currentMove + 1), roundState];
+    setTimeline(nextTimeline);
+
+    console.log('timeline', timeline)
+    
+    // positions.
+    const nextPosition = [...positions.slice(0, currentMove + 1), buttonPosition];
+    setPositions(nextPosition);
+    console.log('START positions')
+    console.log(positions)
+    console.log('START positions')
+
     setCurrentMove(nextHistory.length - 1);
   }
 
@@ -84,17 +134,76 @@ export default function Game() {
     setCurrentMove(nextMove);
   }
 
-  function JumpBtn({move, desc, onJumpClick}){
+  function updateSortOrder( order ){
+    let newOrder;
+    newOrder = order === 'desc' ? 'asc' : 'desc';
+    setSortOrder( newOrder );
+  }
+
+  function JumpBtn( { move, desc, onJumpClick }){
     return (
-      <button onClick={() => onJumpClick(move)}>Go to {desc}</button>
+      <button 
+        onClick={() => onJumpClick(move)}
+      >
+        Go to {desc}
+      </button>
     )
   }
 
-  const moves = history.map((squares, move) => {
+  function SortHistoryButton({order, onSortClick}){
+    return (
+      <button
+        onClick={onSortClick}
+      >
+        Sort order ({order})
+      </button>
+    );
+  }
+
+  let sortButton = <SortHistoryButton 
+    order={sortOrder} 
+    onSortClick={() => { 
+      updateSortOrder(sortOrder);
+      console.log(sortOrder);
+    } }
+  />;
+
+  function TimelineItem({}){
+    return(
+      <span>
+        Timeline item sutaato
+      </span>
+    );
+  }
+  
+  const movesList = [...timeline].map( ( snapshot, move ) => {
     let description;
+    let position;
 
     if (move > 0) {
       description = 'move #' + move;
+      // Determine Position (Col, row) in a hideously ineffecient fashion.
+      const pos = snapshot.position
+      let row = 'A';
+      let col = 1;
+
+      if ( pos === 1 || pos === 4 || pos === 7 ) {
+        col = 2;
+      }
+
+      if ( pos === 2 || pos === 5 || pos === 8 ) {
+        col = 3;
+      }
+      
+      if ( pos > 5 ) {
+        row = 'C';
+      } else if ( pos > 3 ) {
+        row = 'B';
+      }
+
+      position = " (" + row + ", " + col + ")"
+      description += position;
+      // End Determine Position (Col, row).
     } else {
       description = 'game start';
     }
@@ -103,7 +212,12 @@ export default function Game() {
     if (move === currentMove) {
       historyMessage = "You are on " + description;
     } else {
-      historyMessage = <JumpBtn move={move} desc={description} onJumpClick={() => jumpTo(move)} />;
+
+      historyMessage = <JumpBtn
+        move={move}
+        desc={description} 
+        onJumpClick={() => jumpTo(move)}
+      />;
     }
 
     return (
@@ -116,10 +230,16 @@ export default function Game() {
   return (
     <div className="game">
       <div className="game-board">
-        <Board xIsNext={xIsNext} squares={currentSquares} onPlay={handlePlay} />
+        <Board
+          xIsNext={xIsNext}
+          squares={currentSquares}
+          onPlay={handlePlay}
+          count={btnCount} 
+        />
       </div>
       <div className="game-info">
-        <ol>{moves}</ol>
+        {sortButton}
+        <ol>{ sortOrder === 'desc'? movesList : movesList.reverse()}</ol>
       </div>
     </div>
   );
